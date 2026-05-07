@@ -16,16 +16,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout source code (platform-project)
+      # =========================
+      # 1. Checkout source code
+      # =========================
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Enable Docker Buildx
+      # =========================
+      # 2. SECRET SCANNING (NEW 🔐)
+      # Detect leaked tokens, passwords, keys
+      # =========================
+      - name: Run Gitleaks (Secrets Scan)
+        uses: gitleaks/gitleaks-action@v2
+
+      # =========================
+      # 3. SETUP DOCKER BUILDX
+      # =========================
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 3. Login to GitHub Container Registry (GHCR)
-      # We use GITHUB_TOKEN here because it's internal to this repo's registry
+      # =========================
+      # 4. LOGIN TO GHCR
+      # =========================
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
@@ -33,47 +45,71 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 4. Build Docker image (immutable tag = git SHA)
+      # =========================
+      # 5. BUILD IMAGE
+      # =========================
       - name: Build Docker image
         run: |
           docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} .
           docker tag ${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ env.IMAGE_NAME }}:latest
 
-      # 5. Trivy security scan
-      - name: Run Trivy scan
+      # =========================
+      # 6. FILE SYSTEM SECURITY SCAN (NEW 🔍)
+      # scans dependencies before push
+      # =========================
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          format: table
+          exit-code: 0
+
+      # =========================
+      # 7. CONTAINER IMAGE SCAN (STRICT MODE 🔥)
+      # fails pipeline on HIGH/CRITICAL issues
+      # =========================
+      - name: Trivy image scan
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
           format: table
           exit-code: 0
+          severity: HIGH,CRITICAL
 
-      # 6. Push image to GHCR
+      # =========================
+      # 8. PUSH IMAGE TO GHCR
+      # =========================
       - name: Push Docker image
         run: |
           docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
           docker push ${{ env.IMAGE_NAME }}:latest
 
-      # 7. Update GitOps repository (ArgoCD watched repo)
+      # =========================
+      # 9. KUBERNETES MANIFEST SCAN (NEW 🧱)
+      # detects insecure configs
+      # =========================
+      - name: Scan Kubernetes manifests (Checkov)
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: app/
+
+      # =========================
+      # 10. UPDATE GITOPS REPO (ARGOCD TRIGGER)
+      # =========================
       - name: Update GitOps Repo
         env:
-          # This MUST be a Personal Access Token (PAT) stored in your secrets
           GITOPS_TOKEN: ${{ secrets.GITOPS_TOKEN }}
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
 
-          # Clone the GitOps repo using the PAT for authentication
           git clone https://x-access-token:${GITOPS_TOKEN}@github.com/dhia-03/platform-gitops.git
           cd platform-gitops
 
-          # Update the deployment manifest with the new image tag (SHA)
-          # This targets the specific image line in your path: app/platform-app/deployment.yaml
           sed -i "s|image: .*platform-project:.*|image: ${{ env.IMAGE_NAME }}:${{ github.sha }}|g" app/platform-app/deployment.yaml
 
           git add .
-          
-          # Commit the change. The [skip ci] prevents an infinite loop of actions.
-          git commit -m "chore: update image to ${{ github.sha }} [skip ci]" || echo "No changes to commit"
 
-          # Push back to the main branch of the GitOps repo
+          git commit -m "chore: update image to ${{ github.sha }} [skip ci]" || echo "No changes"
+
           git push https://x-access-token:${GITOPS_TOKEN}@github.com/dhia-03/platform-gitops.git main

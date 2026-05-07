@@ -40,3 +40,4 @@ jobs:
       - name: Push Docker image
         run: |
           docker push ghcr.io/dhia-03/platform-project:latest
+# Triggering CI/CD after GHCR permission fix

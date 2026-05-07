@@ -24,7 +24,7 @@ jobs:
 
     # 4. Trivy scan (security gate)
     - name: Trivy scan
-      uses: aquasecurity/trivy-action@0.20.0
+      uses: aquasecurity/trivy-action@0.28.0
       with:
         image-ref: ghcr.io/${{ secrets.GHCR_USERNAME }}/devsecops-app:${{ github.sha }}
         format: table

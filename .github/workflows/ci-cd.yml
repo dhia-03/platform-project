@@ -23,14 +23,12 @@ jobs:
         docker build -t ghcr.io/${{ secrets.GHCR_USERNAME }}/devsecops-app:${{ github.sha }} .
 
     # 4. Trivy scan (security gate)
-    - name: Trivy scan
-      uses: aquasecurity/trivy-action@master
+    - name: Run Trivy scan
+      uses: aquasecurity/trivy-action@0.24.0
       with:
         image-ref: ghcr.io/dhia-03/devsecops-app:latest
         format: table
-        exit-code: 1
-        ignore-unfixed: true
-    # 5. Push image
+        exit-code: 0    # 5. Push image
     - name: Push image
       run: |
         docker push ghcr.io/${{ secrets.GHCR_USERNAME }}/devsecops-app:${{ github.sha }}

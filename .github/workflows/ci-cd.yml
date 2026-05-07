@@ -1,0 +1,51 @@
+name: DevSecOps CI/CD Pipeline
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  build-scan-push:
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Checkout code
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    # 2. Login to GHCR
+    - name: Login to GHCR
+      run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+
+    # 3. Build Docker image
+    - name: Build image
+      run: |
+        docker build -t ghcr.io/${{ secrets.GHCR_USERNAME }}/devsecops-app:${{ github.sha }} .
+
+    # 4. Trivy scan (security gate)
+    - name: Trivy scan
+      uses: aquasecurity/trivy-action@0.20.0
+      with:
+        image-ref: ghcr.io/${{ secrets.GHCR_USERNAME }}/devsecops-app:${{ github.sha }}
+        format: table
+        exit-code: 1
+        severity: HIGH,CRITICAL
+
+    # 5. Push image
+    - name: Push image
+      run: |
+        docker push ghcr.io/${{ secrets.GHCR_USERNAME }}/devsecops-app:${{ github.sha }}
+
+    # 6. Update Helm image tag
+    - name: Update Helm values
+      run: |
+        sed -i "s/tag:.*/tag: ${GITHUB_SHA}/" helm/app/values.yaml
+
+    # 7. Commit updated tag
+    - name: Commit changes
+      run: |
+        git config user.name "github-actions"
+        git config user.email "github-actions@github.com"
+        git add helm/app/values.yaml
+        git commit -m "update image tag"
+        git push

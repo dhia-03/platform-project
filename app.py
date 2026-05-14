@@ -76,7 +76,7 @@ success_page = """
     <title>Logged In</title>
 </head>
 <body style="font-family: Arial; text-align:center; margin-top:100px;">
-    <h1>Logged Successfully ✅</h1>
+    <h1>Logged in  Successfully ✅</h1>
 </body>
 </html>
 """

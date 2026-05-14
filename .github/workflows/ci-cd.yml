@@ -91,6 +91,7 @@ jobs:
           target: ${{ env.DAST_TARGET }}
           fail_action: false
           cmd_options: "-a"
+          allow_issue_writing: false
 
 
       # =========================

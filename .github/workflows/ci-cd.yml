@@ -10,6 +10,7 @@ permissions:
 
 env:
   IMAGE_NAME: ghcr.io/dhia-03/platform-project
+  DAST_TARGET: http://18.234.84.25:3000
 
 jobs:
   build-scan-push:
@@ -63,62 +64,7 @@ jobs:
           exit-code: 0
 
       # =========================
-      # 7. Run temporary container
-      # =========================
-      - name: Run temporary container
-        run: |
-          docker run -d \
-            --name test-app \
-            -p 3000:3000 \
-            ${{ env.IMAGE_NAME }}:${{ github.sha }}
-
-      # =========================
-      # 8. Wait for startup
-      # =========================
-      - name: Wait for startup
-        run: |
-          echo "Waiting for app..."
-          sleep 20
-
-      # =========================
-      # 9. Verify app is reachable
-      # =========================
-      - name: Verify app
-        run: |
-          curl http://localhost:3000 || true
-          docker ps
-          docker logs test-app
-
-      # =========================
-      # 10. OWASP ZAP DAST Scan
-      # =========================
-      - name: OWASP ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.12.0
-        with:
-          target: "http://localhost:3000"
-          fail_action: false
-          cmd_options: "-a"
-
-      # =========================
-      # 11. Upload ZAP report
-      # =========================
-      - name: Upload ZAP Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: zap-report
-          path: report_html.html
-
-      # =========================
-      # 12. Cleanup container
-      # =========================
-      - name: Cleanup container
-        if: always()
-        run: |
-          docker stop test-app || true
-          docker rm test-app || true
-
-      # =========================
-      # 13. Trivy image scan
+      # 7. Trivy image scan
       # =========================
       - name: Trivy Image Scan
         uses: aquasecurity/trivy-action@master
@@ -129,7 +75,36 @@ jobs:
           severity: HIGH,CRITICAL
 
       # =========================
-      # 14. Push Docker image
+      # 8. Verify remote app
+      # =========================
+      - name: Verify remote application
+        run: |
+          curl -I ${{ env.DAST_TARGET }}
+
+      # =========================
+      # 9. OWASP ZAP DAST Scan
+      # =========================
+      - name: OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: ${{ env.DAST_TARGET }}
+          fail_action: false
+          cmd_options: "-a"
+
+      # =========================
+      # 10. Upload ZAP report
+      # =========================
+      - name: Upload ZAP Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: |
+            report_html.html
+            report_md.md
+            report_json.json
+
+      # =========================
+      # 11. Push Docker image
       # =========================
       - name: Push Docker image
         run: |
@@ -137,7 +112,7 @@ jobs:
           docker push ${{ env.IMAGE_NAME }}:latest
 
       # =========================
-      # 15. Checkout GitOps repository
+      # 12. Checkout GitOps repository
       # =========================
       - name: Checkout GitOps repository
         uses: actions/checkout@v4
@@ -147,7 +122,7 @@ jobs:
           token: ${{ secrets.GITOPS_TOKEN }}
 
       # =========================
-      # 16. Checkov Kubernetes scan
+      # 13. Checkov Kubernetes scan
       # =========================
       - name: Scan Kubernetes manifests (Checkov)
         uses: bridgecrewio/checkov-action@master
@@ -158,7 +133,7 @@ jobs:
           skip_check: CKV_K8S_40
 
       # =========================
-      # 17. Update GitOps repository
+      # 14. Update GitOps repository
       # =========================
       - name: Update GitOps Repo
         run: |

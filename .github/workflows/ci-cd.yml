@@ -85,7 +85,6 @@ jobs:
       # =========================
       # 9. OWASP ZAP Baseline Scan (FIXED)
       # =========================
-      # Fix Permission Denied for ZAP Docker container
       - name: Prepare workspace for ZAP
         run: chmod -R 777 ${{ github.workspace }}
 
@@ -96,14 +95,14 @@ jobs:
           target: ${{ env.DAST_TARGET }}
           fail_action: false
           cmd_options: "-a"
-          # Disable the internal action upload to prevent the 400 error
-          artifact_name: "" 
+          # This is the key fix: prevent the action from trying to upload itself
+          upload_report: false 
 
       - name: Upload ZAP Reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: zap-scan-report
+          name: zap-baseline-report
           path: |
             report_json.json
             report_md.md

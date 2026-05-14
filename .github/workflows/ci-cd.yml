@@ -7,7 +7,7 @@ on:
 permissions:
   contents: write
   packages: write
-  issues: write   # required if any tool tries to create issues
+  issues: write
 
 env:
   IMAGE_NAME: ghcr.io/dhia-03/platform-project
@@ -85,14 +85,29 @@ jobs:
       # =========================
       # 9. OWASP ZAP Baseline Scan (FIXED)
       # =========================
+      # Fix Permission Denied for ZAP Docker container
+      - name: Prepare workspace for ZAP
+        run: chmod -R 777 ${{ github.workspace }}
+
       - name: OWASP ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.12.0
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           target: ${{ env.DAST_TARGET }}
           fail_action: false
           cmd_options: "-a"
-          allow_issue_writing: false
+          # Disable the internal action upload to prevent the 400 error
+          artifact_name: "" 
 
+      - name: Upload ZAP Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-scan-report
+          path: |
+            report_json.json
+            report_md.md
+            report_html.html
 
       # =========================
       # 10. Push Docker image
@@ -129,14 +144,9 @@ jobs:
       - name: Update GitOps Repo
         run: |
           cd gitops
-
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-
           sed -i "s|image: .*platform-project:.*|image: ${{ env.IMAGE_NAME }}:${{ github.sha }}|g" app/platform-app/deployment.yaml
-
           git add .
-
           git commit -m "chore: update image to ${{ github.sha }} [skip ci]" || echo "No changes"
-
           git push

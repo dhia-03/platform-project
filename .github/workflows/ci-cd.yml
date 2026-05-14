@@ -18,27 +18,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # =========================
-      # 1. Checkout repository
-      # =========================
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # =========================
-      # 2. Secret scanning
-      # =========================
       - name: Run Gitleaks (Secrets Scan)
         uses: gitleaks/gitleaks-action@v2
 
-      # =========================
-      # 3. Docker build setup
-      # =========================
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # =========================
-      # 4. Login to GHCR
-      # =========================
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
@@ -46,17 +34,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # =========================
-      # 5. Build Docker image
-      # =========================
       - name: Build Docker image
         run: |
           docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} .
           docker tag ${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ env.IMAGE_NAME }}:latest
 
-      # =========================
-      # 6. Trivy filesystem scan
-      # =========================
       - name: Trivy FS Scan
         uses: aquasecurity/trivy-action@master
         with:
@@ -64,9 +46,6 @@ jobs:
           format: table
           exit-code: 0
 
-      # =========================
-      # 7. Trivy image scan
-      # =========================
       - name: Trivy Image Scan
         uses: aquasecurity/trivy-action@master
         with:
@@ -75,34 +54,31 @@ jobs:
           exit-code: 0
           severity: HIGH,CRITICAL
 
-      # =========================
-      # 8. Verify remote application
-      # =========================
       - name: Verify remote application
-        run: |
-          curl -I ${{ env.DAST_TARGET }}
+        run: curl -I ${{ env.DAST_TARGET }}
 
       # =========================
-      # 9. OWASP ZAP Baseline Scan (FIXED)
+      # 9. OWASP ZAP Baseline Scan (MANUAL FIX)
       # =========================
-      - name: Prepare workspace for ZAP
-        run: chmod -R 777 ${{ github.workspace }}
-
       - name: OWASP ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.12.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          target: ${{ env.DAST_TARGET }}
-          fail_action: false
-          cmd_options: "-a"
-          # This is the key fix: prevent the action from trying to upload itself
-          upload_report: false 
+        run: |
+          # Create reports files and set permissions
+          touch report_json.json report_md.md report_html.html
+          chmod a+w report_json.json report_md.md report_html.html
+          
+          # Run ZAP via Docker directly to bypass the buggy Action wrapper
+          docker run --rm -v $(pwd):/zap/wrk/:rw --network=host -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+            -t ${{ env.DAST_TARGET }} \
+            -J report_json.json \
+            -w report_md.md \
+            -r report_html.html \
+            -a || echo "ZAP found issues, continuing..."
 
       - name: Upload ZAP Reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: zap-baseline-report
+          name: zap-scan-report
           path: |
             report_json.json
             report_md.md
@@ -116,9 +92,6 @@ jobs:
           docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
           docker push ${{ env.IMAGE_NAME }}:latest
 
-      # =========================
-      # 11. Checkout GitOps repo
-      # =========================
       - name: Checkout GitOps repository
         uses: actions/checkout@v4
         with:
@@ -126,9 +99,6 @@ jobs:
           path: gitops
           token: ${{ secrets.GITOPS_TOKEN }}
 
-      # =========================
-      # 12. Checkov scan
-      # =========================
       - name: Scan Kubernetes manifests (Checkov)
         uses: bridgecrewio/checkov-action@master
         with:
@@ -137,9 +107,6 @@ jobs:
           soft_fail: true
           skip_check: CKV_K8S_40
 
-      # =========================
-      # 13. Update GitOps repo
-      # =========================
       - name: Update GitOps Repo
         run: |
           cd gitops

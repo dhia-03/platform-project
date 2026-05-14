@@ -17,13 +17,13 @@ jobs:
 
     steps:
       # =========================
-      # 1. Checkout CI repository (code)
+      # 1. Checkout repository
       # =========================
       - name: Checkout repository
         uses: actions/checkout@v4
 
       # =========================
-      # 2. Secret scanning (security)
+      # 2. Secret scanning
       # =========================
       - name: Run Gitleaks (Secrets Scan)
         uses: gitleaks/gitleaks-action@v2
@@ -45,7 +45,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # =========================
-      # 5. Build image
+      # 5. Build Docker image
       # =========================
       - name: Build Docker image
         run: |
@@ -63,7 +63,49 @@ jobs:
           exit-code: 0
 
       # =========================
-      # 7. Trivy image scan (security gate)
+      # 7. Run temporary container
+      # =========================
+      - name: Run temporary container
+        run: |
+          docker run -d \
+            --name test-app \
+            -p 3000:3000 \
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      # =========================
+      # 8. Wait for app startup
+      # =========================
+      - name: Wait for startup
+        run: sleep 30
+
+      # =========================
+      # 9. DAST Scan with OWASP ZAP
+      # =========================
+      - name: OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: "http://localhost:3000"
+          fail_action: false
+
+      # =========================
+      # 10. Cleanup test container
+      # =========================
+      - name: Cleanup container
+        run: |
+          docker stop test-app
+          docker rm test-app
+
+      # =========================
+      # 11. Upload ZAP report
+      # =========================
+      - name: Upload ZAP Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: report_html.html
+
+      # =========================
+      # 12. Trivy image scan
       # =========================
       - name: Trivy Image Scan
         uses: aquasecurity/trivy-action@master
@@ -74,7 +116,7 @@ jobs:
           severity: HIGH,CRITICAL
 
       # =========================
-      # 8. Push image
+      # 13. Push Docker image
       # =========================
       - name: Push Docker image
         run: |
@@ -82,7 +124,7 @@ jobs:
           docker push ${{ env.IMAGE_NAME }}:latest
 
       # =========================
-      # 9. Checkout GitOps repo (IMPORTANT FIX)
+      # 14. Checkout GitOps repository
       # =========================
       - name: Checkout GitOps repository
         uses: actions/checkout@v4
@@ -92,7 +134,7 @@ jobs:
           token: ${{ secrets.GITOPS_TOKEN }}
 
       # =========================
-      # 10. FIXED CHECKOV SCAN (NOW WORKS)
+      # 15. Checkov Kubernetes scan
       # =========================
       - name: Scan Kubernetes manifests (Checkov)
         uses: bridgecrewio/checkov-action@master
@@ -103,7 +145,7 @@ jobs:
           skip_check: CKV_K8S_40
 
       # =========================
-      # 11. Update GitOps repo (ArgoCD trigger)
+      # 16. Update GitOps repository
       # =========================
       - name: Update GitOps Repo
         run: |

@@ -7,6 +7,7 @@ on:
 permissions:
   contents: write
   packages: write
+  issues: write   # ✅ required if ZAP tries to open issues
 
 env:
   IMAGE_NAME: ghcr.io/dhia-03/platform-project
@@ -30,7 +31,7 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
 
       # =========================
-      # 3. Docker setup
+      # 3. Docker build setup
       # =========================
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -75,30 +76,14 @@ jobs:
           severity: HIGH,CRITICAL
 
       # =========================
-      # 8. Push Docker image
-      # =========================
-      - name: Push Docker image
-        run: |
-          docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
-          docker push ${{ env.IMAGE_NAME }}:latest
-
-      # =========================
-      # 9. Wait for EC2 deployment (IMPORTANT FIX)
-      # =========================
-      - name: Wait for application to be ready
-        run: |
-          echo "Waiting for EC2 app to be ready..."
-          sleep 20
-
-      # =========================
-      # 10. Verify remote application
+      # 8. Verify remote application
       # =========================
       - name: Verify remote application
         run: |
           curl -I ${{ env.DAST_TARGET }}
 
       # =========================
-      # 11. OWASP ZAP DAST Scan
+      # 9. OWASP ZAP DAST Scan (FIXED)
       # =========================
       - name: OWASP ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.12.0
@@ -106,9 +91,10 @@ jobs:
           target: ${{ env.DAST_TARGET }}
           fail_action: false
           cmd_options: "-a"
+          allow_issue_writing: false   # 🔥 IMPORTANT FIX
 
       # =========================
-      # 12. Upload ZAP report
+      # 10. Upload ZAP report
       # =========================
       - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
@@ -120,7 +106,15 @@ jobs:
             report_json.json
 
       # =========================
-      # 13. Checkout GitOps repo
+      # 11. Push Docker image
+      # =========================
+      - name: Push Docker image
+        run: |
+          docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.IMAGE_NAME }}:latest
+
+      # =========================
+      # 12. Checkout GitOps repo
       # =========================
       - name: Checkout GitOps repository
         uses: actions/checkout@v4
@@ -130,7 +124,7 @@ jobs:
           token: ${{ secrets.GITOPS_TOKEN }}
 
       # =========================
-      # 14. Checkov Kubernetes scan
+      # 13. Checkov scan
       # =========================
       - name: Scan Kubernetes manifests (Checkov)
         uses: bridgecrewio/checkov-action@master
@@ -141,7 +135,7 @@ jobs:
           skip_check: CKV_K8S_40
 
       # =========================
-      # 15. Update GitOps repository
+      # 14. Update GitOps repo
       # =========================
       - name: Update GitOps Repo
         run: |

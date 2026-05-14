@@ -92,20 +92,9 @@ jobs:
           fail_action: false
           cmd_options: "-a"
 
-      # =========================
-      # 10. Upload ZAP Report (FIXED)
-      # =========================
-      - name: Upload ZAP Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: zap-report-${{ github.run_id }}
-          path: |
-            report_html.html
-            report_md.md
-            report_json.json
 
       # =========================
-      # 11. Push Docker image
+      # 10. Push Docker image
       # =========================
       - name: Push Docker image
         run: |
@@ -113,7 +102,7 @@ jobs:
           docker push ${{ env.IMAGE_NAME }}:latest
 
       # =========================
-      # 12. Checkout GitOps repo
+      # 11. Checkout GitOps repo
       # =========================
       - name: Checkout GitOps repository
         uses: actions/checkout@v4
@@ -123,7 +112,7 @@ jobs:
           token: ${{ secrets.GITOPS_TOKEN }}
 
       # =========================
-      # 13. Checkov scan
+      # 12. Checkov scan
       # =========================
       - name: Scan Kubernetes manifests (Checkov)
         uses: bridgecrewio/checkov-action@master
@@ -134,7 +123,7 @@ jobs:
           skip_check: CKV_K8S_40
 
       # =========================
-      # 14. Update GitOps repo
+      # 13. Update GitOps repo
       # =========================
       - name: Update GitOps Repo
         run: |

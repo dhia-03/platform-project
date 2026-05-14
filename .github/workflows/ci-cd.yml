@@ -7,7 +7,7 @@ on:
 permissions:
   contents: write
   packages: write
-  issues: write   # ✅ required if ZAP tries to open issues
+  issues: write   # required if any tool tries to create issues
 
 env:
   IMAGE_NAME: ghcr.io/dhia-03/platform-project
@@ -83,7 +83,7 @@ jobs:
           curl -I ${{ env.DAST_TARGET }}
 
       # =========================
-      # 9. OWASP ZAP DAST Scan (FIXED)
+      # 9. OWASP ZAP Baseline Scan (FIXED)
       # =========================
       - name: OWASP ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.12.0
@@ -91,15 +91,14 @@ jobs:
           target: ${{ env.DAST_TARGET }}
           fail_action: false
           cmd_options: "-a"
-          allow_issue_writing: false   # 🔥 IMPORTANT FIX
 
       # =========================
-      # 10. Upload ZAP report
+      # 10. Upload ZAP Report (FIXED)
       # =========================
       - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
         with:
-          name: zap-report
+          name: zap-report-${{ github.run_id }}
           path: |
             report_html.html
             report_md.md

@@ -11,7 +11,7 @@ permissions:
 
 env:
   IMAGE_NAME: ghcr.io/dhia-03/platform-project
-  DAST_TARGET: http://18.234.84.25:3000
+  DAST_TARGET: http://34.226.190.157:3000
 
 jobs:
   build-scan-push:

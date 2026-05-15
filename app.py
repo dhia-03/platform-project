@@ -2,8 +2,6 @@ from flask import Flask, request, render_template_string, redirect, url_for
 
 app = Flask(__name__)
 
-USERNAME = "admin"
-PASSWORD = "admin123"
 
 login_page = """
 <!DOCTYPE html>
